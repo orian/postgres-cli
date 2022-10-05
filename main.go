@@ -38,8 +38,6 @@ func main() {
 		fmt.Printf("got err: %s", err)
 		os.Exit(1)
 	}
-	d := time.Now().Sub(t)
-	fmt.Println(d)
 
 	if err := rows.Err(); err != nil {
 		fmt.Printf("rows err: %s", err)
@@ -55,6 +53,7 @@ func main() {
 	}
 
 	defer rows.Close()
+	i := 0
 	for rows.Next() {
 		vals, err := rows.Values()
 		if err != nil {
@@ -62,5 +61,8 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println(vals)
+		i++
 	}
+	d := time.Now().Sub(t)
+	fmt.Printf("fetch %d rows took: %s\n", i, d)
 }
