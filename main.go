@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func main() {
@@ -30,37 +32,51 @@ func main() {
 
 	query := args[0]
 
-	ctx, canc := context.WithTimeout(context.Background(), time.Second)
+	ctx, canc := context.WithTimeout(context.Background(), 30*time.Second)
 	defer canc()
+
 	t := time.Now()
-	rows, err := conn.Query(ctx, query)
-	if err != nil {
+	var tag pgconn.CommandTag
+	if strings.Contains(query, "SELECT") {
+		rows, err := conn.Query(ctx, query)
+		if err != nil {
+			fmt.Printf("got err: %s", err)
+			os.Exit(1)
+		}
+
+		if err := rows.Err(); err != nil {
+			fmt.Printf("rows err: %s", err)
+			os.Exit(1)
+		}
+
+		tag = rows.CommandTag()
+		fmt.Println(tag.String())
+
+		defer rows.Close()
+		for rows.Next() {
+			vals, err := rows.Values()
+			if err != nil {
+				fmt.Printf("values err: %s", err)
+				os.Exit(1)
+			}
+			fmt.Println(vals)
+		}
+		d := time.Now().Sub(t)
+		fmt.Println(d)
+	} else if tag, err = conn.Exec(ctx, query); err != nil {
 		fmt.Printf("got err: %s", err)
 		os.Exit(1)
 	}
-	d := time.Now().Sub(t)
-	fmt.Println(d)
 
-	if err := rows.Err(); err != nil {
-		fmt.Printf("rows err: %s", err)
-		os.Exit(1)
+	switch {
+	case tag.Select():
+		fmt.Println("select type")
+	case tag.Insert():
+		fmt.Println("insert type")
+	case tag.Delete():
+		fmt.Println("delete type")
+	case tag.Update():
+		fmt.Println("update type")
 	}
 
-	fmt.Println(rows.CommandTag().String())
-	switch t := rows.CommandTag(); {
-	case t.Select():
-	case t.Insert():
-	case t.Delete():
-	case t.Update():
-	}
-
-	defer rows.Close()
-	for rows.Next() {
-		vals, err := rows.Values()
-		if err != nil {
-			fmt.Printf("values err: %s", err)
-			os.Exit(1)
-		}
-		fmt.Println(vals)
-	}
 }
